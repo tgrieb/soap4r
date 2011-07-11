@@ -17,7 +17,6 @@ require 'soap/mapping/rubytypeFactory'
 module SOAP
 module Mapping
 
-
 # Inner class to pass an exception.
 class SOAPException
   attr_reader :excn_type_name, :cause
@@ -60,6 +59,7 @@ class EncodedRegistry
 
     def obj2soap(obj)
       klass = obj.class
+      #puts("\n*** obj2soap obj=#{obj} klass=#{klass}")
       if map = @obj2soap[klass]
         map.each do |soap_class, factory, info|
           ret = factory.obj2soap(soap_class, obj, info, @registry)
@@ -289,6 +289,9 @@ class EncodedRegistry
     @default_factory = @rubytype_factory
     @excn_handler_obj2soap = nil
     @excn_handler_soap2obj = nil
+    
+    @excn_handler_obj2soap = Proc.new{|obj| ::SOAP::SOAPDateTime.new(obj.utc) if obj.is_a? (::ActiveSupport::TimeWithZone) } 
+
   end
 
   # initial mapping interface
@@ -328,13 +331,17 @@ private
   def _obj2soap(obj, type_qname = nil)
     ret = nil
     if obj.is_a?(SOAPCompoundtype)
+      #puts("\n***_obj2soap #{obj} obj.is_a?(SOAPCompoundtype) ")	
       obj.replace do |ele|
+        #puts("\n***_obj2soap replacing ele #{ele} ")	
         Mapping._obj2soap(ele, self)
       end
       return obj
     elsif obj.is_a?(SOAPBasetype)
+      #puts("\n***_obj2soap #{obj} obj.is_a?(SOAPCompoundtype) ")	
       return obj
     elsif type_qname && type = TypeMap[type_qname]
+      #puts("\n***_obj2soap else returning obj=#{obj} type=#{type}; #{base2soap(obj, type)} ")	
       return base2soap(obj, type)
     end
     cause = nil
@@ -344,12 +351,15 @@ private
       end
       ret = @map.obj2soap(obj) ||
         @default_factory.obj2soap(nil, obj, nil, self)
+      #puts("\n***#{__FILE__} line #{__LINE__}*** obj=#{obj} ret=#{ret}")
       return ret if ret
     rescue MappingError
       cause = $!
     end
+	#puts("\n***#{__FILE__} line #{__LINE__}*** #{@excn_handler_obj2soap}")
     if @excn_handler_obj2soap
       ret = @excn_handler_obj2soap.call(obj) { |yield_obj|
+	   #puts("\n***excn_handler_obj2soap yield_obj #{yield_obj}***")
         Mapping._obj2soap(yield_obj, self)
       }
       return ret if ret
@@ -533,7 +543,6 @@ end
 Registry = EncodedRegistry
 DefaultRegistry = EncodedRegistry.new
 RubyOriginalRegistry = EncodedRegistry.new(:allow_original_mapping => true)
-
 
 end
 end
